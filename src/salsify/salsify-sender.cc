@@ -190,6 +190,38 @@ enum class OperationMode
 {
   S1, S2, Conventional
 };
+FILE* input_yuv_file = fopen( "/mnt/md3/xiangjie/EVA/coded.yuv", "rb" );
+Optional<RasterHandle> local_get_next_frame()
+{
+  // get current time
+  auto timestamp_ms = duration_cast<milliseconds>( system_clock::now().time_since_epoch() ).count();
+
+  cout << "timestamp_ms: " << timestamp_ms << endl;
+
+  MutableRasterHandle raster_handle { 1920, 1080 };
+  auto & raster = raster_handle.get();
+
+
+
+  // Only support YUV420P
+  {
+    // read the yuv file to the raster
+    int ret = fread( &raster.Y().at( 0, 0 ), 1, 1920 * 1080, input_yuv_file );
+    if ( ret != 1920 * 1080 ) {
+      cerr << "Byebye" << endl;
+      exit( 0 );
+    }
+    ret = fread( &raster.U().at( 0, 0 ), 1, 1920 * 1080 / 4, input_yuv_file );
+    ret = fread( &raster.V().at( 0, 0 ), 1, 1920 * 1080 / 4, input_yuv_file );
+    if ( ret != 1920 * 1080 / 4 ) {
+      cerr << "Failed to read the yuv file" << endl;
+    }
+  }
+
+
+  return RasterHandle{ move( raster_handle ) };
+}
+
 
 int main( int argc, char *argv[] )
 {
@@ -281,10 +313,10 @@ int main( int argc, char *argv[] )
   }
 
   /* camera device */
-  Camera camera { 1280, 720, PIXEL_FORMAT_STRS.at( pixel_format ), camera_device };
+  // Camera camera { 1920, 1080, PIXEL_FORMAT_STRS.at( pixel_format ), camera_device };
 
   /* construct the encoder */
-  Encoder base_encoder { camera.display_width(), camera.display_height(),
+  Encoder base_encoder { 1920, 1080,
                          false /* two-pass */, REALTIME_QUALITY };
 
   const uint32_t initial_state = base_encoder.minihash();
@@ -343,7 +375,7 @@ int main( int argc, char *argv[] )
     [&]() -> Result {
       encode_start_pipe.second.read();
 
-      last_raster = camera.get_next_frame();
+      last_raster = local_get_next_frame();
 
       if ( not last_raster.initialized() ) {
         return { ResultType::Exit, EXIT_FAILURE };

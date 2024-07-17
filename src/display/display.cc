@@ -98,7 +98,7 @@ VideoDisplay::CurrentContextWindow::CurrentContextWindow( const unsigned int wid
 {
   window_.make_context_current( true );
 }
-
+FILE* yuv_file;
 VideoDisplay::VideoDisplay( const BaseRaster & raster, const bool fullscreen )
   : display_width_( raster.display_width() ),
     display_height_( raster.display_height() ),
@@ -109,6 +109,11 @@ VideoDisplay::VideoDisplay( const BaseRaster & raster, const bool fullscreen )
     U_ ( width_ / 2, height_ / 2 ),
     V_ ( width_ / 2, height_ / 2 )
 {
+  yuv_file = fopen( "/mnt/md3/xiangjie/EVA/salsify.yuv", "wb" );
+  cout << "yuv_file: " << yuv_file << endl;
+    if ( yuv_file == NULL ) {
+    throw Invalid( "failed to open output.yuv" );
+  }
   texture_shader_program_.attach( scale_from_pixel_coordinates_ );
   texture_shader_program_.attach( ycbcr_shader_ );
   texture_shader_program_.link();
@@ -170,8 +175,14 @@ void VideoDisplay::resize( const pair<unsigned int, unsigned int> & target_size 
 void VideoDisplay::draw( const BaseRaster & raster )
 {
   if ( width_ != raster.width() or height_ != raster.height() ) {
+    
     throw Invalid( "inconsistent raster dimensions." );
   }
+  // save the raster to yuv file
+  cout << raster.width() << " " << raster.height() << endl;
+  raster.dump( yuv_file );
+  
+
 
   Y_.load( raster.Y() );
   U_.load( raster.U() );
