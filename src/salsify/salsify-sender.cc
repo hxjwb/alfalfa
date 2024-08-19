@@ -53,10 +53,13 @@
 #include "camera.hh"
 #include "pacer.hh"
 #include "procinfo.hh"
+#define WIDTH 1280
+#define HEIGHT 720
 
 using namespace std;
 using namespace std::chrono;
 using namespace PollerShortNames;
+
 
 class AverageEncodingTime
 {
@@ -190,33 +193,58 @@ enum class OperationMode
 {
   S1, S2, Conventional
 };
-FILE* input_yuv_file = fopen( "/mnt/md3/xiangjie/EVA/coded.yuv", "rb" );
+FILE* input_yuv_file = fopen( "/mnt/md3/xiangjie/EVA/ugc_again/coded_Gaming_1080P-45af_crf_10_ss_00_t_20.0720.yuv", "rb" );
+
+int start_timestamp = 0;
+int last_timestamp = 0;
 Optional<RasterHandle> local_get_next_frame()
 {
   // get current time
   auto timestamp_ms = duration_cast<milliseconds>( system_clock::now().time_since_epoch() ).count();
+  int timestamp = timestamp_ms;
+  if ( start_timestamp == 0 ) {
+    start_timestamp = timestamp;
+  }
+  else {
+    int theduration = timestamp - start_timestamp;
+    
+    if (last_timestamp != 0) {
+      int diff = timestamp - last_timestamp;
+      cerr << "duration: " << theduration << " diff: " << diff << endl;
+    }
+    last_timestamp = timestamp;
+  }
 
-  cout << "timestamp_ms: " << timestamp_ms << endl;
+  // cerr << "timestamp_ms: " << timestamp_ms << endl;
 
-  MutableRasterHandle raster_handle { 1920, 1080 };
+  MutableRasterHandle raster_handle { WIDTH, HEIGHT };
   auto & raster = raster_handle.get();
 
 
 
   // Only support YUV420P
-  {
+  // time analysis
+  // auto timestamp_us = duration_cast<microseconds>( system_clock::now().time_since_epoch() ).count();
     // read the yuv file to the raster
-    int ret = fread( &raster.Y().at( 0, 0 ), 1, 1920 * 1080, input_yuv_file );
-    if ( ret != 1920 * 1080 ) {
+    int ret = fread( &raster.Y().at( 0, 0 ), 1, WIDTH * HEIGHT, input_yuv_file );
+    if ( ret != WIDTH * HEIGHT ) {
       cerr << "Byebye" << endl;
       exit( 0 );
     }
-    ret = fread( &raster.U().at( 0, 0 ), 1, 1920 * 1080 / 4, input_yuv_file );
-    ret = fread( &raster.V().at( 0, 0 ), 1, 1920 * 1080 / 4, input_yuv_file );
-    if ( ret != 1920 * 1080 / 4 ) {
+    ret = fread( &raster.U().at( 0, 0 ), 1, WIDTH * HEIGHT / 4, input_yuv_file );
+    ret = fread( &raster.V().at( 0, 0 ), 1, WIDTH * HEIGHT / 4, input_yuv_file );
+    if ( ret != WIDTH * HEIGHT / 4 ) {
       cerr << "Failed to read the yuv file" << endl;
     }
-  }
+  // auto timestamp_us2 = duration_cast<microseconds>( system_clock::now().time_since_epoch() ).count();
+  // cerr << "read yuv file time: " << timestamp_us2 - timestamp_us << endl;
+
+  // // Test sending pure color
+  // {
+  //   memset( &raster.Y().at(0, 0 ), 128, WIDTH * HEIGHT );
+  //   memset( &raster.U().at(0, 0 ), 128, WIDTH * HEIGHT / 4 );
+  //   memset( &raster.V().at(0, 0 ), 128, WIDTH * HEIGHT / 4 );
+  // }
 
 
   return RasterHandle{ move( raster_handle ) };
@@ -225,6 +253,8 @@ Optional<RasterHandle> local_get_next_frame()
 
 int main( int argc, char *argv[] )
 {
+
+
   /* check the command-line arguments */
   if ( argc < 1 ) { /* for sticklers */
     abort();
@@ -280,7 +310,7 @@ int main( int argc, char *argv[] )
       return EXIT_FAILURE;
     }
   }
-
+  operation_mode = OperationMode::S2; 
   if ( optind + 2 >= argc ) {
     usage( argv[ 0 ] );
     return EXIT_FAILURE;
@@ -313,10 +343,10 @@ int main( int argc, char *argv[] )
   }
 
   /* camera device */
-  // Camera camera { 1920, 1080, PIXEL_FORMAT_STRS.at( pixel_format ), camera_device };
+  // Camera camera { WIDTH, HEIGHT, PIXEL_FORMAT_STRS.at( pixel_format ), camera_device };
 
   /* construct the encoder */
-  Encoder base_encoder { 1920, 1080,
+  Encoder base_encoder { WIDTH, HEIGHT,
                          false /* two-pass */, REALTIME_QUALITY };
 
   const uint32_t initial_state = base_encoder.minihash();
