@@ -109,7 +109,7 @@ VideoDisplay::VideoDisplay( const BaseRaster & raster, const bool fullscreen )
     U_ ( width_ / 2, height_ / 2 ),
     V_ ( width_ / 2, height_ / 2 )
 {
-  yuv_file = fopen( "/mnt/md3/xiangjie/EVA/salsify.yuv", "wb" );
+  yuv_file = fopen( "rec.yuv", "wb" );
   cout << "yuv_file: " << yuv_file << endl;
     if ( yuv_file == NULL ) {
     throw Invalid( "failed to open output.yuv" );

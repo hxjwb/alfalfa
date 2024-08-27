@@ -184,7 +184,16 @@ int main( int argc, char *argv[] )
 
   /* construct Socket for incoming  datagrams */
   UDPSocket socket;
-  socket.bind( Address( "0", argv[ optind ] ) );
+  // socket.bind( Address( "0", argv[ optind ] ) );
+#if 1
+  std::string server_ip = "143.89.46.221";
+  int server_port = 30325;
+#else
+  std::string server_ip = "127.0.0.1";
+  int server_port = 30325;
+#endif
+  std::string my_message = "hello";
+  socket.sendto( Address( server_ip, server_port ),  my_message);
   socket.set_timestamps();
 
   /* construct FramePlayer */
@@ -219,6 +228,10 @@ int main( int argc, char *argv[] )
 
       /* parse into Packet */
       const Packet packet { new_fragment.payload };
+
+
+      uint64_t timestamp_ms = duration_cast<milliseconds>( system_clock::now().time_since_epoch() ).count();
+      cerr << "framenum|nowtimestamp " << packet.frame_no() << "|" << timestamp_ms <<endl;
 
       if ( packet.frame_no() < next_frame_no ) {
         /* we're not interested in this anymore */

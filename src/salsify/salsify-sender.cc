@@ -193,7 +193,7 @@ enum class OperationMode
 {
   S1, S2, Conventional
 };
-FILE* input_yuv_file = fopen( "/mnt/md3/xiangjie/EVA/ugc_again/coded_Gaming_1080P-45af_crf_10_ss_00_t_20.0720.yuv", "rb" );
+FILE* input_yuv_file = fopen( "/home/xiangjie/720p.yuv", "rb" );
 
 int start_timestamp = 0;
 int last_timestamp = 0;
@@ -318,9 +318,22 @@ int main( int argc, char *argv[] )
 
   /* construct Socket for outgoing datagrams */
   UDPSocket socket;
-  socket.connect( Address( argv[ optind ], argv[ optind + 1 ] ) );
+  // socket.connect( Address( argv[ optind ], argv[ optind + 1 ] ) );
+  socket.bind( Address( "0", 30325 ) );
   socket.set_timestamps();
 
+  // receive data
+  const auto new_fragment = socket.recv();
+
+  Address peer_address = new_fragment.source_address;
+  std::string ip = peer_address.ip();
+  int port = peer_address.port();
+  std::string peer_message = new_fragment.payload;
+  if ( peer_message == "hello" ) {
+    cout << "Now we can start the transmission " << ip << " " << port << endl;
+  }
+
+  socket.connect( peer_address );
   /* make pacer to smooth out outgoing packets */
   Pacer pacer;
 
@@ -699,6 +712,7 @@ int main( int argc, char *argv[] )
       }
 
       // cerr << "\n";
+      cerr << "framenum|timestamp " << frame_no << "|" << duration_cast<milliseconds>( system_clock::now().time_since_epoch() ).count() << endl;
 
       cumulative_fpf.push_back( ( frame_no > 0 )
                                 ? ( cumulative_fpf[ frame_no - 1 ] + ff.fragments_in_this_frame() )
