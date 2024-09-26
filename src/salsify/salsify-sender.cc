@@ -55,6 +55,7 @@
 #include "procinfo.hh"
 #define WIDTH 1280
 #define HEIGHT 720
+#define FILENAME "/home/xiangjie/720p.yuv"
 
 using namespace std;
 using namespace std::chrono;
@@ -193,7 +194,7 @@ enum class OperationMode
 {
   S1, S2, Conventional
 };
-FILE* input_yuv_file = fopen( "/home/xiangjie/720p.yuv", "rb" );
+FILE* input_yuv_file = fopen( FILENAME, "rb" );
 
 int start_timestamp = 0;
 int last_timestamp = 0;
@@ -202,6 +203,7 @@ Optional<RasterHandle> local_get_next_frame()
   // get current time
   auto timestamp_ms = duration_cast<milliseconds>( system_clock::now().time_since_epoch() ).count();
   int timestamp = timestamp_ms;
+  int frame_number = 0;
   if ( start_timestamp == 0 ) {
     start_timestamp = timestamp;
   }
@@ -211,6 +213,8 @@ Optional<RasterHandle> local_get_next_frame()
     if (last_timestamp != 0) {
       int diff = timestamp - last_timestamp;
       cerr << "duration: " << theduration << " diff: " << diff << endl;
+      frame_number = theduration / 33;
+      
     }
     last_timestamp = timestamp;
   }
@@ -226,6 +230,8 @@ Optional<RasterHandle> local_get_next_frame()
   // time analysis
   // auto timestamp_us = duration_cast<microseconds>( system_clock::now().time_since_epoch() ).count();
     // read the yuv file to the raster
+    // seek to frame frame_number
+    fseek( input_yuv_file, frame_number * WIDTH * HEIGHT * 3 / 2, SEEK_SET );
     int ret = fread( &raster.Y().at( 0, 0 ), 1, WIDTH * HEIGHT, input_yuv_file );
     if ( ret != WIDTH * HEIGHT ) {
       cerr << "Byebye" << endl;
@@ -261,8 +267,8 @@ int main( int argc, char *argv[] )
   }
 
   /* camera settings */
-  string camera_device = "/dev/video0";
-  string pixel_format = "NV12";
+  string camera_device = "/dev/video2";
+  string pixel_format = "YU12";
   size_t update_rate __attribute__((unused)) = 1;
   OperationMode operation_mode = OperationMode::S2;
   bool log_mem_usage = false;
@@ -283,11 +289,9 @@ int main( int argc, char *argv[] )
 
     switch ( opt ) {
     case 'd':
-      camera_device = optarg;
       break;
 
     case 'p':
-      pixel_format = optarg;
       break;
 
     case 'm':
@@ -310,7 +314,6 @@ int main( int argc, char *argv[] )
       return EXIT_FAILURE;
     }
   }
-  operation_mode = OperationMode::S2; 
   if ( optind + 2 >= argc ) {
     usage( argv[ 0 ] );
     return EXIT_FAILURE;
@@ -319,9 +322,9 @@ int main( int argc, char *argv[] )
   /* construct Socket for outgoing datagrams */
   UDPSocket socket;
   // socket.connect( Address( argv[ optind ], argv[ optind + 1 ] ) );
-  socket.bind( Address( "0", 30325 ) );
+  socket.bind( Address( "0", 3032 ) );
   socket.set_timestamps();
-
+  operation_mode = OperationMode::S2;
   // receive data
   const auto new_fragment = socket.recv();
 
@@ -417,7 +420,7 @@ int main( int argc, char *argv[] )
   poller.add_action( Poller::Action( encode_start_pipe.second, Direction::In,
     [&]() -> Result {
       encode_start_pipe.second.read();
-
+      // last_raster = camera.get_next_frame();
       last_raster = local_get_next_frame();
 
       if ( not last_raster.initialized() ) {
@@ -558,6 +561,8 @@ int main( int argc, char *argv[] )
 
           next_cc_update = system_clock::now() + cc_update_interval;
         }
+        // cc_quantizer = 31;
+        cerr << "Encoding frame " << frame_no << " with quantizer " << cc_quantizer << endl;
 
         encode_jobs.emplace_back( "frame", raster, encoder, CONSTANT_QUANTIZER,
                                   cc_quantizer, 0  );
@@ -645,6 +650,13 @@ int main( int argc, char *argv[] )
       else {
         /* choose the best based on the current capacity */
         for ( size_t i = 0; i < good_outputs.size(); i++ ) {
+          cerr << "Frame " << frame_no << ": " << good_outputs[ i ].job_name
+               << " (" << to_string( good_outputs[ i ].y_ac_qi ) << ") = "
+               << good_outputs[ i ].frame.size() << " bytes ("
+               << good_outputs[ i ].encode_time.count() << " ms, ssim="
+               << good_outputs[ i ].encoder.stats().ssim.get_or( -1.0 )
+               << ") {" << good_outputs[ i ].source_minihash << " -> "
+               << good_outputs[ i ].encoder.minihash() << "}" << endl;
           if ( good_outputs[ i ].frame.size() <= frame_size ) {
             if ( frame_size - good_outputs[ i ].frame.size() < best_size_diff ) {
               best_size_diff = frame_size - good_outputs[ i ].frame.size();
@@ -669,7 +681,7 @@ int main( int argc, char *argv[] )
           }
         }
       }
-
+      cerr << "Sending frame index " << best_output_index << endl;
       auto output = move( good_outputs[ best_output_index ] );
 
       uint32_t target_minihash = output.encoder.minihash();
